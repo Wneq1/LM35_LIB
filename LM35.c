@@ -42,7 +42,7 @@ void UART_Init(void)
   HAL_UART_Init(&huart2);
 }
 
-void DisplayTemperature(uint32_t temperature, uint8_t decimal_places, const char* text)
+void DisplayTemperatureHuart(uint32_t temperature, uint8_t decimal_places, const char* text)
 {
   char format_str[30];
   sprintf(format_str, "%s T: %%d.%%0%dd\r\n", text, decimal_places);
@@ -62,9 +62,10 @@ void DisplayTemperature(uint32_t temperature, uint8_t decimal_places, const char
   HAL_UART_Transmit(&huart2, (uint8_t*)char_num_var, strlen(char_num_var), HAL_MAX_DELAY);
 }
 
-uint32_t GetTemperature(uint8_t ADC_channel)
+uint32_t GetTemperature(uint8_t ADC_channel,const char* scale)
 {
 	char error_message[50];
+	char error_message_tmp[50];
   ADC_ChannelConfTypeDef sConfig = {0};
 
 
@@ -138,6 +139,14 @@ uint32_t GetTemperature(uint8_t ADC_channel)
   uint32_t temp_decimal = ((ADC_val * 330) % 4095) * 100 / 4095;
 
   uint32_t temperature = temp * 100 + temp_decimal;
+
+  if (strcmp(scale, "F") == 0) {
+    temperature = (temperature * 9 / 5) + 32;
+  } else if (strcmp(scale, "C") != 0) {
+    sprintf(error_message_tmp, "Powinienes wybrac C lub F a wybrales: %s\r\n",scale);
+    HAL_UART_Transmit(&huart2, (uint8_t*)error_message_tmp, strlen(error_message_tmp), HAL_MAX_DELAY);
+    temperature = 0;
+  }
   return temperature;
 }
 
@@ -169,3 +178,23 @@ void hysteresis(uint32_t temp, uint32_t hist, uint32_t currentTemp, GPIO_TypeDef
 	  sprintf(uart_buffer, "Gorna histereza: %d\r\n",temp + hist);
 	  HAL_UART_Transmit(&huart2, (uint8_t*)uart_buffer, strlen(uart_buffer), HAL_MAX_DELAY);
 	}
+
+char* ConvertTemperatureChar(uint32_t temperature)
+{
+  uint32_t wholePart = temperature / 100;
+  uint32_t decimalPart = temperature % 100;
+
+
+  int length = snprintf(NULL, 0, "%ld.%02ld", wholePart, decimalPart);
+  if (length < 0) {
+    return NULL;
+  }
+
+  char* temp_char = (char*)malloc((length + 1) * sizeof(char));
+  if (temp_char == NULL) {
+    return NULL;
+  }
+
+  sprintf(temp_char, "%ld.%02ld", wholePart, decimalPart);
+  return temp_char;
+}
